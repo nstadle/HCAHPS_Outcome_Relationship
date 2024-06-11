@@ -1,0 +1,135 @@
+---
+title: "HCAHPS Impact on Patient Outcomes within United States Hospitals"
+author: "Nick Stadler"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## **Introduction**
+
+Hospital Consumer Assessment of Healthcare Providers and Systems (HCAHPS) is a survey sent out to discharged adult patients after a stay in an acute care hospital. This survey is requested of the patient between 2 days to 6 weeks post discharge and asks the patient to rate on a scale of 1-5, 5 being the best, various questions relating to their stay to gauge their experience.  Questions pertain to the responsiveness of the staff, cleanliness of the facility, communication, and other aspects regarding how the patient feels their experience was while admitted. Patients are selected at random for this survey, and are not limited to Medicare beneficiaries. These scores are submitted to the Centers for Medicaid and Medicare Services (CMS) and taken into account for incentive payments to acute care hospitals under the Inpatient Prospective Payment System and the Hospital Value-Based Purchasing program.
+
+The objective of this report is to ascertain if better patient outcomes are related to higher HCAHPS scores.
+
+Data has been cleaned using SQL to remove facilities that are outside the 50 states, as well as those run by the United States military and Veterans Affairs. 
+
+### Facility Info
+
+In total 4,585 acute care facilities across all 50 states and Washington D.C. reported at least some data to CMS that is used in this report. The distribution of facilities is shown in the graph below. The data is taken from patient interactions within each facility from July 1st, 2022 through June 30th, 2023. CMS data dictionary for these databases can be found [HERE](https://data.cms.gov/provider-data/dataset/dgmq-aat3#data-dictionary). 
+
+```{r Facility_Count, echo=FALSE}
+library(utils)
+library(RODBC)
+library(DBI)
+library(rmarkdown)
+library(usmap)
+library(usmapdata)
+library(ggplot2)
+
+
+con <- dbConnect(odbc::odbc(), driver = "SQL Server", server = "NICKSTADLERCC64", database = "capstone")
+Facility_Count <- dbReadTable(con, "Facility_Count")
+
+paged_table(Facility_Count)
+
+plot_usmap(data = Facility_Count, values = "Count", color = "white") + scale_fill_continuous(low="light blue", high="blue", name="Hospital Locations by State", label = scales::comma) + theme(legend.position = "right")
+```
+
+## **Analysis**
+
+### HCAHPS compared to MORT-30 Outcomes
+
+HCAHPS scores from each facility are averaged to provide an overall score and then plotted against varying aspects of care to find any relationship of how the patient views care and the result of their care.
+
+The following is an analysis of the relationship of HCAHPS scores and patient outcomes. Outcomes in this report are measured based upon 30 day mortality (MORT-30) rates in the categories of Acute Myocardial Infarction (AMI), Heart Failure (HF), Pneumonia (PN), Chronic Obstructive Pulmonary Disorder (COPD), and Coronary Artery Bypass Graft (CABG). This information is provided from the acute care hospital for stays between July 1st, 2022 through June 30th, 2023. All data is obtained from the Centers for Medicare & Medicaid Services <https://data.cms.gov/provider-data/search>.
+
+```{r AMI_AVG_Stars, echo=FALSE}
+library(ggplot2)
+library(ggstatsplot)
+
+AMI_AVG_Stars <- dbReadTable(con, "AMI_AVG_Stars")
+HF_AVG_Stars <- dbReadTable(con, "HF_AVG_Stars")
+PN_AVG_Stars <- dbReadTable(con, "PN_AVG_Stars")
+COPD_AVG_Stars <- dbReadTable(con, "COPD_AVG_Stars")
+CABG_AVG_Stars <- dbReadTable(con, "CABG_AVG_Stars")
+
+ggstatsplot::ggscatterstats(data=AMI_AVG_Stars,x=AVG.Stars,y=MORT.30.AMI.Performance.Rate,xlab="Average of HCAHPS Star Rating",ylab="Acute Myocardial Infarction 30 Day Mortality Rate", title="Relationship of HCAHPS and 30 Day Acute Myocardial Infarction Mortality Rate")+geom_jitter()
+
+summary(AMI_AVG_Stars)
+
+ggstatsplot::ggscatterstats(data=HF_AVG_Stars,x=AVG.Stars,y=MORT.30.HF.Performance.Rate,xlab="Average of HCAHPS Star Rating",ylab="Heart Failure 30 Day Mortality Rate", title="Relationship of HCAHPS and 30 Day Heart Failure Mortality Rate")+geom_jitter()
+
+summary(HF_AVG_Stars)
+
+ggstatsplot::ggscatterstats(data=PN_AVG_Stars,x=AVG.Stars,y=MORT.30.PN.Performance.Rate,xlab="Average of HCAHPS Star Rating",ylab="Pneumonia 30 Day Mortality Rate", title="Relationship of HCAHPS and 30 Day Pneumonia Mortality Rate")+geom_jitter()
+
+summary(PN_AVG_Stars)
+
+ggstatsplot::ggscatterstats(data=COPD_AVG_Stars,x=AVG.Stars,y=MORT.30.COPD.Performance.Rate,xlab="Average of HCAHPS Star Rating",ylab="Chronic Obstructive Pulmonary Disorder 30 Day Mortality Rate", title="Relationship of HCAHPS and 30 Day COPD Mortality Rate")+geom_jitter()
+
+summary(COPD_AVG_Stars)
+
+ggstatsplot::ggscatterstats(data=CABG_AVG_Stars,x=AVG.Stars,y=MORT.30.CABG.Performance.Rate,xlab="Average of HCAHPS Star Rating",ylab="Coronary Artery Bypass Graft 30 Day Mortality Rate", title="Relationship of HCAHPS and 30 Day CABG Mortality Rate")+geom_jitter()
+
+summary(CABG_AVG_Stars)
+
+```
+
+### HCAHPS Compared to Healthcare Associated Infections
+
+With very low Pearson correlation coefficient values on each of the MORT-30 outcomes, further examination was done by comparing HCAHPS scores to Healthcare Associated Infections (HAI). HAI are grouped into 6 categories HAI 1-6 and correlate to central-line associated bloodstream infections (CLABSI), catheter-associated urinary tract infections (CAUTI), surgical site infection (SSI) from colon surgery, SSI from abdominal hysterectomy, Methicillin-resistant *Staphylococcus aureus* (MRSA), and *Clostridium difficile* (C.diff) infections respectively. HAI Performance Rates are calculated by the number of observed infections for that category divided by the number of predicted infections for that category, therefore, lower performance rate is better.
+
+```{r HAI_1_HCAHPS, echo=FALSE}
+HAI_1_HCAHPS <- dbReadTable(con, "HAI-1-HCAHPS")
+HAI_2_HCAHPS <- dbReadTable(con, "HAI-2-HCAHPS")
+HAI_3_HCAHPS <- dbReadTable(con, "HAI-3-HCAHPS")
+HAI_4_HCAHPS <- dbReadTable(con, "HAI-4-HCAHPS")
+HAI_5_HCAHPS <- dbReadTable(con, "HAI-5-HCAHPS")
+HAI_6_HCAHPS <- dbReadTable(con, "HAI-6-HCAHPS")
+
+ggstatsplot::ggscatterstats(data=HAI_1_HCAHPS,x=AVG.Stars,y=HAI.1.Performance.Rate,xlab="Average of HCAHPS Star Rating",ylab="Central Line Associated Bloodstream Infection Rate", title="Relationship of HCAHPS and CLABSI Rate")+geom_jitter()
+
+summary(HAI_1_HCAHPS)
+
+ggstatsplot::ggscatterstats(data=HAI_2_HCAHPS,x=AVG.Stars,y=HAI.2.Performance.Rate,xlab="Average of HCAHPS Star Rating",ylab="Catheter Associated Urinary Tract Infection Rate", title="Relationship of HCAHPS and CAUTI Rate")+geom_jitter()
+
+summary(HAI_2_HCAHPS)
+
+ggstatsplot::ggscatterstats(data=HAI_3_HCAHPS,x=AVG.Stars,y=HAI.3.Performance.Rate,xlab="Average of HCAHPS Star Rating",ylab="Surgical Site Infection - Colon Surgery Infection Rate", title="Relationship of HCAHPS and SSI - Colon Surgery")+geom_jitter()
+
+summary(HAI_3_HCAHPS)
+
+ggstatsplot::ggscatterstats(data=HAI_4_HCAHPS,x=AVG.Stars,y=HAI.4.Performance.Rate,xlab="Average of HCAHPS Star Rating",ylab="Surgical Site Infection - Abdominal Hysterectomy Infection Rate", title="Relationship of HCAHPS and SSI - Abdominal Hysterectomy")+geom_jitter()
+
+summary(HAI_4_HCAHPS)
+
+ggstatsplot::ggscatterstats(data=HAI_5_HCAHPS,x=AVG.Stars,y=HAI.5.Performance.Rate,xlab="Average of HCAHPS Star Rating",ylab="Methicillin-Resistant Staphylococcus aureus Infection Rate", title="Relationship of HCAHPS and MRSA Infection Rate")+geom_jitter()
+
+summary(HAI_5_HCAHPS)
+
+ggstatsplot::ggscatterstats(data=HAI_6_HCAHPS,x=AVG.Stars,y=HAI.6.Performance.Rate,xlab="Average of HCAHPS Star Rating",ylab="Clostridium difficile Infection Rate", title="Relationship of HCAHPS and C.diff Infection Rate")+geom_jitter()
+
+summary(HAI_6_HCAHPS)
+```
+
+### HCAHPS Compared to Readmissions
+
+With HCAHPS scoring not showing a strong link with MORT-30 outcomes or HAI, the relationship between HCAHPS and readmission ratios was explored. Readmission ratios (calculated by predicted readmission / expected readmission, lower is better) for each category of AMI, HF, PN, COPD, and CABG were averaged for each facility and plotted against the average HCAHP score.
+
+``` {r Readmit_HCAHPS_AVG, echo=FALSE}
+
+Readmit_HCAHPS_AVG <- dbReadTable(con, "Readmit_HCAHPS_AVG")
+
+ggstatsplot::ggscatterstats(data=Readmit_HCAHPS_AVG,x=AVG.Stars,y=AVG_Readmit_Ratio,xlab="Average of HCAHPS Star Rating",ylab="Average Readmit Ratio", title="Relationship of HCAHPS and Average Readmit Ratio")+geom_jitter()
+summary(Readmit_HCAHPS_AVG)
+
+```
+
+This correlation does show the strongest relationship of any others explored in this report, however, it does not show a strong definitive relationship of higher HCAHPS score related to lower readmission rate.
+
+## **Conclusion**
+
+Based upon this data, there does not seem to be a strong relationship between HCAHPS scoring and outcomes, hospital acquired infections, or readmission rates after a hospital stay for the categories mentioned for the time frame this data was provided. More research is needed to find how a patient views their care and how the result of their care can be related to help overall outcomes, and properly incentive acute care facilities for the care in which they provide. 
